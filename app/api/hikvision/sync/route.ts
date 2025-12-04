@@ -85,7 +85,7 @@ async function fetchHikvisionEvents(): Promise<HikvisionInfoLog[]> {
   let searchPosition = 0;
   let hasMoreData = true;
 
-  // Safety cap: avoid infinite hammering, adjust if needed
+  // safety cap: don't hammer device forever
   const MAX_PAGES = 50; // 50 * 30 = 1500 logs max per run
   let page = 0;
 
@@ -113,8 +113,7 @@ async function fetchHikvisionEvents(): Promise<HikvisionInfoLog[]> {
     if (!response.ok) {
       const text = await response.text().catch(() => "");
 
-      // 👉 If we already have some data, and then get 401,
-      // treat as "device stopped giving more", not full failure.
+      // If we already got some data and then 401, treat it as "end"
       if (response.status === 401 && allRecords.length > 0) {
         console.warn(
           `Received 401 after fetching ${allRecords.length} logs, returning partial data.`
@@ -126,7 +125,7 @@ async function fetchHikvisionEvents(): Promise<HikvisionInfoLog[]> {
       console.error(
         `Hikvision HTTP error: ${response.status} ${response.statusText} :: ${text}`
       );
-      // First request itself failing -> real auth issue
+      // First request itself failing → genuine auth/connection error
       throw new Error(
         `Hikvision Error ${response.status} - ${response.statusText} :: ${text}`
       );
@@ -226,6 +225,18 @@ async function saveEventsToDB(logs: HikvisionInfoLog[]) {
 
 export async function POST() {
   try {
+    // 🔒 Block syncing where it's not allowed (like Vercel)
+    if (process.env.ENABLE_HIKVISION_SYNC !== "true") {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Hikvision sync is disabled in this environment. Run this API from your local network machine.",
+        },
+        { status: 503 }
+      );
+    }
+
     await connectDB();
 
     const logs = await fetchHikvisionEvents();
@@ -251,4 +262,3 @@ export async function POST() {
     );
   }
 }
-    
