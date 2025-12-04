@@ -1,13 +1,8 @@
 // lib/mongodb.ts
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI as string;
-
-if (!MONGODB_URI) {
-  throw new Error(
-    "Please define the MONGODB_URI environment variable in .env.local"
-  );
-}
+// Don't throw here — just read the value
+const MONGODB_URI = process.env.MONGODB_URI || "";
 
 let cached = (global as any).mongoose;
 
@@ -16,6 +11,13 @@ if (!cached) {
 }
 
 async function connectDB() {
+  // Throw ONLY when we actually attempt connection
+  if (!MONGODB_URI) {
+    throw new Error(
+      "MONGODB_URI is not set. Please add it to .env.local or your deployment environment settings."
+    );
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
